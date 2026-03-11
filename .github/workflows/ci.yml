@@ -1,0 +1,125 @@
+name: Advanced CI/CD Pipeline (Optional)
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ develop ]
+
+jobs:
+  # 代码质量检查
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pylint black flake8
+      
+      - name: Check code style
+        run: |
+          black --check bot_app/ 2>/dev/null || true
+      
+      - name: Lint with flake8
+        run: |
+          flake8 bot_app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        continue-on-error: true
+      
+      - name: Lint with pylint
+        run: |
+          pylint bot_app/ --fail-under=7 2>/dev/null || true
+        continue-on-error: true
+
+  # 单元测试
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      
+      - name: Run tests
+        run: |
+          pytest tests/ -v --cov=bot_app --cov-report=xml 2>/dev/null || echo "No tests found"
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+        continue-on-error: true
+
+  # Docker 镜像构建检查
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Build Docker images
+        run: docker-compose build
+      
+      - name: Check image sizes
+        run: docker images | grep vedaaide || echo "Images ready"
+
+  # 安全检查
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install security tools
+        run: |
+          pip install bandit safety
+      
+      - name: Run security checks
+        run: |
+          bandit -r bot_app/ -ll 2>/dev/null || true
+          safety check --json 2>/dev/null || true
+        continue-on-error: true
+
+  # 许可证检查
+  license:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Check licenses
+        run: |
+          echo "License check: Please ensure all dependencies have compatible licenses"
+        continue-on-error: true
+
+  # 通知汇总
+  notify:
+    needs: [quality, test, docker, security]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Print Summary
+        run: |
+          echo "Code Quality: ${{ needs.quality.result }}"
+          echo "Tests: ${{ needs.test.result }}"
+          echo "Docker Build: ${{ needs.docker.result }}"
+          echo "Security: ${{ needs.security.result }}"

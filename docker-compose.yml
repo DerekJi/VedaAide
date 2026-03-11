@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  # Bot 核心服务
+  vedaaide-core:
+    build:
+      context: ./bot_app
+      dockerfile: Dockerfile
+    container_name: vedaaide-core
+    environment:
+      - TG_TOKEN=${TG_TOKEN}
+      - OLLAMA_URL=http://ollama:11434
+      - DB_URL=http://vedaaide-db:5000
+      - CHROMA_URL=http://chroma:8000
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - ./bot_app:/app
+    depends_on:
+      - ollama
+      - vedaaide-db
+    restart: unless-stopped
+    networks:
+      - vedaaide-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Ollama AI 大脑
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    volumes:
+      - ./ollama_data:/root/.ollama
+    # ports:
+    #   - "11434:11434"  # 生产环境不需要暴露
+    restart: unless-stopped
+    networks:
+      - vedaaide-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # SQLite 数据库服务
+  vedaaide-db:
+    build:
+      context: ./sqlite_app
+      dockerfile: Dockerfile
+    container_name: vedaaide-db
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data
+    # ports:
+    #   - "5000:5000"  # 仅内部通信
+    restart: unless-stopped
+    networks:
+      - vedaaide-network
+    depends_on:
+      - "ollama"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ChromaDB 向量数据库（后期启用）
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: chroma
+    volumes:
+      - ./chroma_data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=false
+    # ports:
+    #   - "8000:8000"  # 仅内部通信
+    restart: unless-stopped
+    networks:
+      - vedaaide-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 保活/监控（防止 Oracle 闲置回收，可选）
+  keepalive:
+    image: alpine:latest
+    container_name: vedaaide-keepalive
+    command: /bin/sh -c "while true; do echo '[keepalive] heartbeat'; sleep 3600; done"
+    restart: unless-stopped
+    networks:
+      - vedaaide-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+
+networks:
+  vedaaide-network:
+    driver: bridge
+
+volumes:
+  data:
+    driver: local
+  chroma_data:
+    driver: local
+  ollama_data:
+    driver: local

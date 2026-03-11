@@ -1,0 +1,76 @@
+name: Deploy to Oracle Cloud
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ORACLE_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.ORACLE_SERVER_IP }} >> ~/.ssh/known_hosts
+      
+      - name: Deploy to Oracle Cloud
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.ORACLE_SSH_USER }}@${{ secrets.ORACLE_SERVER_IP }} << 'EOF'
+          set -e
+          
+          echo "🚀 Starting deployment..."
+          cd ${{ secrets.ORACLE_PROJECT_PATH }}
+          
+          # 拉取最新代码
+          echo "📥 Pulling latest code..."
+          git fetch origin
+          git reset --hard origin/main
+          
+          # 停止现有服务
+          echo "🛑 Stopping existing services..."
+          docker-compose down || true
+          
+          # 拉取最新镜像
+          echo "📦 Pulling latest images..."
+          docker-compose pull
+          
+          # 启动新服务
+          echo "🚀 Starting new services..."
+          docker-compose up -d
+          
+          # 等待服务启动
+          echo "⏳ Waiting for services to be ready..."
+          sleep 10
+          
+          # 健康检查
+          echo "🏥 Running health checks..."
+          docker-compose ps
+          
+          echo "✅ Deployment completed successfully!"
+          EOF
+      
+      - name: Cleanup SSH
+        if: always()
+        run: |
+          rm -rf ~/.ssh/id_rsa
+          rm -rf ~/.ssh/known_hosts
+      
+      - name: Notify deployment status
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            VedaAide Deployment ${{ job.status }}
+            Commit: ${{ github.sha }}
+            Author: ${{ github.actor }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true

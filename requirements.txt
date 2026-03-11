@@ -1,0 +1,32 @@
+# VedaAide Bot 依赖
+
+# Telegram 机器人框架
+aiogram==2.25.1
+
+# 异步支持
+aiohttp==3.9.0
+
+# 数据库
+sqlite3-helper==1.1.5
+
+# 向量数据库（后期）
+chromadb==0.4.0
+
+# HTTP 客户端（用于与 Ollama 通信）
+httpx==0.25.0
+
+# JSON 处理
+pydantic==2.5.0
+
+# 日志
+python-json-logger==2.0.7
+
+# 定时任务（后期）
+schedule==1.2.0
+APScheduler==3.10.4
+
+# 环境变量
+python-dotenv==1.0.0
+
+# 工具
+click==8.1.7
