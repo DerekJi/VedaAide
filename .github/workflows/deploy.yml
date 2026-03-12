@@ -19,12 +19,13 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.ORACLE_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          cat >> ~/.ssh/config << 'SSHCFG'
-          Host *
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-            LogLevel ERROR
-          SSHCFG
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ConnectTimeout 30\n  ServerAliveInterval 10\n  ServerAliveCountMax 3\n' > ~/.ssh/config
+
+      - name: Test SSH connectivity
+        run: |
+          ssh -i ~/.ssh/id_rsa \
+            ${{ secrets.ORACLE_SSH_USER }}@${{ secrets.ORACLE_SERVER_IP }} \
+            echo "SSH connection OK"
 
       - name: Sync code to VM
         run: |
