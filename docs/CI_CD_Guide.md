@@ -201,7 +201,7 @@ docker-compose up -d
 
 ```bash
 # Telegram Bot
-TG_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
+TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
 
 # Ollama
 OLLAMA_URL=http://ollama:11434

@@ -45,6 +45,8 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             event_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             category TEXT NOT NULL,
+            person TEXT,
+            location TEXT,
             item TEXT,
             quantity REAL,
             unit TEXT,
@@ -59,8 +61,11 @@ def init_db():
         CREATE TABLE IF NOT EXISTS scheduled_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
+            person TEXT,
+            location TEXT,
             category TEXT,
             start_time TIMESTAMP,
+            end_time TIMESTAMP,
             recurrence_rule TEXT,
             required_items TEXT,
             notes TEXT,
@@ -68,6 +73,28 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # 向后兼容：老数据库可能缺少列，启动时自动迁移
+    cursor.execute("PRAGMA table_info(life_events)")
+    life_columns = {row[1] for row in cursor.fetchall()}
+    if "person" not in life_columns:
+        cursor.execute("ALTER TABLE life_events ADD COLUMN person TEXT")
+        logger.info("Migrated life_events: added person column")
+    if "location" not in life_columns:
+        cursor.execute("ALTER TABLE life_events ADD COLUMN location TEXT")
+        logger.info("Migrated life_events: added location column")
+
+    cursor.execute("PRAGMA table_info(scheduled_events)")
+    scheduled_columns = {row[1] for row in cursor.fetchall()}
+    if "person" not in scheduled_columns:
+        cursor.execute("ALTER TABLE scheduled_events ADD COLUMN person TEXT")
+        logger.info("Migrated scheduled_events: added person column")
+    if "location" not in scheduled_columns:
+        cursor.execute("ALTER TABLE scheduled_events ADD COLUMN location TEXT")
+        logger.info("Migrated scheduled_events: added location column")
+    if "end_time" not in scheduled_columns:
+        cursor.execute("ALTER TABLE scheduled_events ADD COLUMN end_time TIMESTAMP")
+        logger.info("Migrated scheduled_events: added end_time column")
     
     # 用户背景信息表
     cursor.execute('''
@@ -158,10 +185,12 @@ def create_life_event():
         data = request.json
         cursor.execute('''
             INSERT INTO life_events 
-            (category, item, quantity, unit, notes, raw_text)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (category, person, location, item, quantity, unit, notes, raw_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             data.get('category'),
+            data.get('person'),
+            data.get('location'),
             data.get('item'),
             data.get('quantity'),
             data.get('unit'),
@@ -213,12 +242,15 @@ def create_scheduled_event():
         data = request.json
         cursor.execute('''
             INSERT INTO scheduled_events 
-            (title, category, start_time, recurrence_rule, required_items, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (title, person, location, category, start_time, end_time, recurrence_rule, required_items, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             data.get('title'),
+            data.get('person'),
+            data.get('location'),
             data.get('category'),
             data.get('start_time'),
+            data.get('end_time'),
             data.get('recurrence_rule'),
             json.dumps(data.get('required_items', [])),
             data.get('notes')

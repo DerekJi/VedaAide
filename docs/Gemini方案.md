@@ -173,7 +173,7 @@ services:
   core_service:
     build: ./bot_app
     environment:
-      - TG_TOKEN=${TG_TOKEN}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OLLAMA_URL=http://ollama:11434      # [变更] 指向本地 Ollama 服务
       - DB_URL=http://sqlite_service:5000   # 通过内部网络访问数据库
       - CHROMA_URL=http://chroma:8000       # 通过内部网络访问向量库

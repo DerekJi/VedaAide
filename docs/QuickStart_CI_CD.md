@@ -70,7 +70,7 @@ cd VedaAide
 
 # 创建 .env 文件（如果需要）
 cat > .env << 'EOF'
-TG_TOKEN=your_telegram_token_here
+TELEGRAM_BOT_TOKEN=your_telegram_token_here
 OLLAMA_URL=http://ollama:11434
 DB_URL=http://vedaaide-db:5000
 TZ=Asia/Shanghai

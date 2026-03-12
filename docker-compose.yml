@@ -2,17 +2,18 @@ version: '3.8'
 
 services:
   # Bot 核心服务
-  vedaaide-core:
+  vedaaide-bot:
     build:
-      context: ./bot_app
-      dockerfile: Dockerfile
-    container_name: vedaaide-core
+      context: .
+      dockerfile: ./bot_app/Dockerfile
+    container_name: vedaaide-bot
     environment:
-      - TG_TOKEN=${TG_TOKEN}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen:7b-chat}
       - DB_URL=http://vedaaide-db:5000
-      - CHROMA_URL=http://chroma:8000
       - TZ=${TZ:-Asia/Shanghai}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./bot_app:/app
     depends_on:
@@ -65,8 +66,6 @@ services:
     restart: unless-stopped
     networks:
       - vedaaide-network
-    depends_on:
-      - "ollama"
     logging:
       driver: "json-file"
       options:
