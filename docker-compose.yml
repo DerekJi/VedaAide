@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Bot 核心服务
+  # Bot 核心服务（直连 SQLite，无 HTTP 依赖）
   vedaaide-bot:
     build:
       context: .
@@ -9,16 +9,17 @@ services:
     container_name: vedaaide-bot
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
       - OLLAMA_URL=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen:7b-chat}
-      - DB_URL=http://vedaaide-db:5000
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:8b}
+      - DB_PATH=/app/data/vedaaide.db
       - TZ=${TZ:-Asia/Shanghai}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./bot_app:/app
+      - ./data:/app/data
     depends_on:
       - ollama
-      - vedaaide-db
     restart: unless-stopped
     networks:
       - vedaaide-network
@@ -51,8 +52,10 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # SQLite 数据库服务
+  # SQLite Web API（仅本地开发工具，供 view_db.mjs 等脚本使用）
+  # 启动方式：docker-compose --profile tools up -d vedaaide-db
   vedaaide-db:
+    profiles: ["tools"]
     build:
       context: ./sqlite_app
       dockerfile: Dockerfile
@@ -61,8 +64,8 @@ services:
       - ./data:/app/data
     environment:
       - DATABASE_PATH=/app/data
-    # ports:
-    #   - "5000:5000"  # 仅内部通信
+    ports:
+      - "5000:5000"
     restart: unless-stopped
     networks:
       - vedaaide-network
@@ -73,7 +76,9 @@ services:
         max-file: "3"
 
   # ChromaDB 向量数据库（后期启用）
+  # 启动方式：docker-compose --profile tools up -d chroma
   chroma:
+    profiles: ["tools"]
     image: chromadb/chroma:latest
     container_name: chroma
     volumes:
@@ -81,21 +86,7 @@ services:
     environment:
       - ANONYMIZED_TELEMETRY=false
     # ports:
-    #   - "8000:8000"  # 仅内部通信
-    restart: unless-stopped
-    networks:
-      - vedaaide-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # 保活/监控（防止 Oracle 闲置回收，可选）
-  keepalive:
-    image: alpine:latest
-    container_name: vedaaide-keepalive
-    command: /bin/sh -c "while true; do echo '[keepalive] heartbeat'; sleep 3600; done"
+    #   - "8000:8000"
     restart: unless-stopped
     networks:
       - vedaaide-network
@@ -109,10 +100,3 @@ networks:
   vedaaide-network:
     driver: bridge
 
-volumes:
-  data:
-    driver: local
-  chroma_data:
-    driver: local
-  ollama_data:
-    driver: local

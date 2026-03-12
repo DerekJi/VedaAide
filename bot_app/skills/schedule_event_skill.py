@@ -56,7 +56,7 @@ class ScheduleEventSkill(BaseSkill):
     "category": "事件类别，例如: swimming(游泳), basketball(篮球), doctor(医生), camping(露营), music(音乐), scout(童子军), other",
     "start_time": "开始时间 ISO8601 格式，例如: 2026-03-15T15:00:00 或 null 如果不确定",
     "end_time": "结束时间 ISO8601 格式，例如: 2026-03-15T16:30:00 或 null 如果不确定",
-    "recurrence_rule": "递推规则，例如: WEEKLY_MON(每周一), WEEKLY_TUE(每周二), BIWEEKLY(每两周), MONTHLY(每月), null 如果是一次性事件",
+    "recurrence_rule": "递推规则，例如: DAILY(每天/每日), WEEKLY_MON(每周一), WEEKLY_TUE(每周二), BIWEEKLY(每两周), MONTHLY(每月), null 如果是一次性事件",
     "required_items": ["所需物品1", "所需物品2"],
     "notes": "其他备注"
 }
@@ -64,11 +64,13 @@ class ScheduleEventSkill(BaseSkill):
 重要规则：
 1. start_time 使用 ISO8601 格式：YYYY-MM-DDTHH:MM:SS
 2. 如果输入包含时间段（如 6.30-8.00），请同时给出 start_time 与 end_time
-2. 对于"每周X"的表述，使用 WEEKLY_MON(周一)、WEEKLY_TUE(周二) 等格式
-3. required_items 是一个字符串数组
-4. 如果没有具体时间，start_time 可以是 null
-5. 尽量从上下文推测时间，但如果无法确定就用 null
-6. 严格返回 JSON，不要有任何其他说明文字
+3. 对于"每周X"的表述，使用 WEEKLY_MON(周一)、WEEKLY_TUE(周二) 等格式
+4. 对于"每天/每日"的表述，使用 DAILY
+5. 时间词换算：早上/上午=AM原值，下午/晚上=+12h（如 早上10:15 → T10:15:00，下午3点 → T15:00:00）
+6. 如果时间依赖夏令时/时区（如"夏时制"），在 notes 中标注，例如：notes: "AEDT夏时制，约4月后需调整"
+7. required_items 是一个字符串数组
+8. 如果没有具体时间，start_time 可以是 null
+9. 严格返回 JSON，不要有任何其他说明文字
 
 示例：
 - 用户: "孩子每周二有游泳课"

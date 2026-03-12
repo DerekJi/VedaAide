@@ -8,96 +8,138 @@ VedaAide/
 │       └── ci.yml                  # CI检查（代码质量、测试等）
 │
 ├── .gitignore                       # Git 忽略列表
-├── docker-compose.yml               # Docker Compose 完整配置
-├── requirements.txt                 # Python 依赖
 ├── .env.example                     # 环境变量模板
+├── docker-compose.yml               # Docker Compose 配置（核心服务：bot + ollama）
+├── package.json                     # 本地开发辅助脚本（npm run ...）
+├── requirements.txt                 # 根级依赖（含 Flask，仅本地开发工具使用）
+├── test_mvp.py                      # MVP 功能集成测试脚本
+├── README.md                        # 项目愿景与需求说明
+├── README_MVP.md                    # MVP 快速启动文档
+├── STRUCTURE.md                     # 本文件：项目结构说明
 │
 ├── docs/
-│   ├── Architecture.md              # 核心设计文档（★重要）
+│   ├── Issues_and_Progress.md       # ★ 问题清单与整改进度追踪（重要）
+│   ├── Test_Plan.md                 # ★ 测试方案（不依赖具体实现，覆盖所有核心需求）
+│   ├── MVP_Implementation.md        # 历史参考：MVP 实现总结
+│   ├── QuickStart_MVP.md            # 快速启动指南（MVP）
 │   ├── CI_CD_Guide.md               # 完整的 CI/CD 部署指南
-│   ├── QuickStart_CI_CD.md          # 5分钟快速启动指南
+│   ├── QuickStart_CI_CD.md          # 5分钟快速启动 CI/CD
 │   ├── Migration_Guide.md           # 数据迁移指南
-│   ├── SimpleArchitecture.md        # 历史参考（DeepSeek方案）
+│   ├── DeepSeek极简策略.md          # 历史参考（DeepSeek方案）
 │   └── Gemini方案.md                # 历史参考（Gemini方案）
 │
-├── bot_app/
-│   ├── Dockerfile                   # Bot服务的Docker镜像定义
-│   ├── main.py                      # 主程序入口（待实现）
-│   ├── requirements.txt              # Python依赖
-│   │
+├── bot_app/                         # ★ Bot 核心服务
+│   ├── Dockerfile                   # Bot 服务的 Docker 镜像定义
+│   ├── requirements.txt             # Bot 依赖（aiogram, aiosqlite, APScheduler 等）
+│   ├── main.py                      # 🤖 主程序入口：Telegram Bot + 每日提醒调度器
+│   ├── ollama_client.py             # LLM 通信：与 Ollama 交互（意图路由 + 信息提取）
+│   ├── db_client.py                 # 数据库层：直接通过 aiosqlite 操作 SQLite
+│   ├── message_processor.py         # 业务逻辑层：纯函数，无 Telegram 依赖，供测试共用
 │   └── skills/
-│       ├── __init__.py
-│       ├── base_skill.py            # Skill基类（待实现）
-│       ├── record_event_skill.py    # 记录事件技能（待实现）
-│       ├── schedule_event_skill.py  # 计划事件技能（待实现）
-│       └── query_data_skill.py      # 数据查询技能（待实现）
+│       ├── __init__.py              # 技能注册表和工厂
+│       ├── base_skill.py            # Skill 基类（抽象接口）
+│       ├── record_event_skill.py    # 技能1：记录一次性生活事件
+│       └── schedule_event_skill.py  # 技能2：记录计划/周期性事件
 │
-├── sqlite_app/
-│   ├── Dockerfile                   # SQLite Web API的Docker镜像
-│   └── app.py                       # Flask Web API应用
+├── sqlite_app/                      # 本地开发工具：SQLite Web API
+│   ├── Dockerfile                   # 仅用于 --profile tools 启动
+│   └── app.py                       # Flask Web API（供 view_db.mjs 等脚本使用）
 │
 ├── scripts/
-│   └── deploy.sh                    # Oracle Cloud 部署脚本
+│   ├── deploy.sh                    # Oracle Cloud 部署脚本
+│   ├── start_local.sh               # 本地开发一键启动脚本
+│   ├── restartable_bot_runner.py    # 本地开发带自动重启的 Bot 运行器
+│   └── view_db.mjs                  # 本地开发：通过 Flask API 查看数据库内容
 │
 ├── data/                            # SQLite 数据文件（Git忽略）
 │   └── vedaaide.db
 │
-├── chroma_data/                     # ChromaDB 向量数据（Git忽略）
+├── tests/                           # ★ 自动化测试套件（pytest + pytest-asyncio）
+│   ├── conftest.py                  # 共享 fixtures（event_loop, tmp_db）
+│   ├── unit/
+│   │   ├── test_db_client.py        # DB 层单元测试（13 个用例）
+│   │   ├── test_message_processor_utils.py  # 纯函数单元测试（27 个用例）
+│   │   └── test_skills.py           # RecordEventSkill / ScheduleEventSkill 解析测试（21 个用例）
+│   └── integration/
+│       └── test_message_processor.py  # MessageProcessor 端到端集成测试（18 个用例）
 │
 ├── ollama_data/                     # Ollama 模型数据（Git忽略）
 │
-├── backups/                         # 自动备份目录（Git忽略）
-│   ├── data_20260311_120000.tar.gz
-│   ├── chroma_data_20260311_120000.tar.gz
-│   └── deploy_20260311_120000.log
+├── chroma_data/                     # ChromaDB 向量数据（后期，Git忽略）
 │
-├── README.md                        # 项目概览（当前阅读）
+├── logs/                            # 运行日志（Git忽略）
+│
 └── .git/                            # Git 版本控制
 ```
 
 ---
 
-## 核心文件说明
+## 架构说明
 
-### .github/workflows/
-- **deploy.yml**: GitHub Actions workflow，在 push 到 main 时自动触发部署
-- **ci.yml**: 可选的代码质量检查、测试、安全检查等
+### 核心服务依赖关系（生产）
 
-### docs/
-- **Architecture.md** - 必读！包含完整的架构设计和分阶段实施计划
-- **QuickStart_CI_CD.md** - 5分钟快速启动 CI/CD
-- **CI_CD_Guide.md** - 详细的部署指南
+```
+Bot（vedaaide-bot）
+  ├── 直连 SQLite 文件（via aiosqlite，无 HTTP 层）
+  └── HTTP → Ollama（LLM 推理）
+```
 
-### bot_app/
-Bot 核心服务代码，包含：
-- main.py: Telegram Bot 主程序
-- skills/: 各种功能技能模块
+**不再依赖 Flask**。Flask + vedaaide-db 容器已改为本地开发工具，通过 `--profile tools` 启动。
 
-### sqlite_app/
-SQLite 数据库的 Web API 服务，供其他容器访问
+### 本地开发工具
 
-### scripts/
-- deploy.sh: 在 Oracle VM 上执行的部署脚本，包含备份、健康检查等
+```bash
+# 启动 Flask API（用于 view_db 等脚本）
+docker-compose --profile tools up -d vedaaide-db
+
+# 查看数据库内容
+npm run db:view:events
+npm run db:view:schedules
+npm run db:view:profile
+```
+
+---
+
+## 环境变量
+
+| 变量名 | 必填 | 说明 |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | ✅ | Telegram Bot Token |
+| `TELEGRAM_CHAT_ID` | 推荐 | 接收每日提醒的 chat ID（不设则跳过推送）|
+| `OLLAMA_URL` | 可选 | Ollama 服务地址，默认 `http://localhost:11434` |
+| `OLLAMA_MODEL` | 可选 | 使用的 LLM 模型，默认 `qwen:7b-chat` |
+| `DB_PATH` | 可选 | SQLite 文件路径，默认 `./data/vedaaide.db` |
+| `TZ` | 可选 | 时区，默认 `Asia/Shanghai` |
+| `LOG_LEVEL` | 可选 | 日志级别，默认 `INFO` |
 
 ---
 
 ## 开发工作流
 
-### 第一次设置（本地开发）
+### 本地开发
 
 ```bash
-# 克隆仓库
-git clone https://github.com/YOUR_USERNAME/VedaAide.git
-cd VedaAide
+# 方式1：Docker Compose（推荐）
+docker-compose up -d  # 启动 bot + ollama
 
-# 创建环境文件
-cp .env.example .env
-# 编辑 .env，添加你的 Telegram Token
+# 方式2：手动
+npm run start:local      # 启动 Ollama + Flask + Bot
+npm run bot:watch        # 带自动重启的 Bot
+npm run test:mvp         # 运行集成测试
+```
 
-# 启动本地开发环境
-docker-compose up -d
+### 数据查看
 
-# 查看日志
+```bash
+# 需要先启动 Flask 服务工具
+docker-compose --profile tools up -d vedaaide-db
+# 或本地: npm run db:local
+
+npm run db:view:events    # 查看生活事件
+npm run db:view:schedules # 查看计划事件
+npm run db:view:profile   # 查看背景信息
+```
+
 docker-compose logs -f core_service
 ```
 

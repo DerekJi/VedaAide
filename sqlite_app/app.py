@@ -28,97 +28,105 @@ os.makedirs(DATABASE_PATH, exist_ok=True)
 
 
 def get_db():
-    """获取数据库连接"""
+    """获取数据库连接（调用方负责关闭，或使用 _db_conn() 上下文管理器）"""
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
 
 
+from contextlib import contextmanager
+
+@contextmanager
+def _db_conn():
+    """带自动关闭的数据库连接上下文管理器。"""
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
 def init_db():
     """初始化数据库"""
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # 生活事件表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS life_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            category TEXT NOT NULL,
-            person TEXT,
-            location TEXT,
-            item TEXT,
-            quantity REAL,
-            unit TEXT,
-            notes TEXT,
-            raw_text TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # 周期性事件表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS scheduled_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            person TEXT,
-            location TEXT,
-            category TEXT,
-            start_time TIMESTAMP,
-            end_time TIMESTAMP,
-            recurrence_rule TEXT,
-            required_items TEXT,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
+    with _db_conn() as conn:
+        # 生活事件表
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS life_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                category TEXT NOT NULL,
+                person TEXT,
+                location TEXT,
+                item TEXT,
+                quantity REAL,
+                unit TEXT,
+                notes TEXT,
+                raw_text TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
-    # 向后兼容：老数据库可能缺少列，启动时自动迁移
-    cursor.execute("PRAGMA table_info(life_events)")
-    life_columns = {row[1] for row in cursor.fetchall()}
-    if "person" not in life_columns:
-        cursor.execute("ALTER TABLE life_events ADD COLUMN person TEXT")
-        logger.info("Migrated life_events: added person column")
-    if "location" not in life_columns:
-        cursor.execute("ALTER TABLE life_events ADD COLUMN location TEXT")
-        logger.info("Migrated life_events: added location column")
+        # 周期性事件表
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS scheduled_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                person TEXT,
+                location TEXT,
+                category TEXT,
+                start_time TIMESTAMP,
+                end_time TIMESTAMP,
+                recurrence_rule TEXT,
+                required_items TEXT,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
-    cursor.execute("PRAGMA table_info(scheduled_events)")
-    scheduled_columns = {row[1] for row in cursor.fetchall()}
-    if "person" not in scheduled_columns:
-        cursor.execute("ALTER TABLE scheduled_events ADD COLUMN person TEXT")
-        logger.info("Migrated scheduled_events: added person column")
-    if "location" not in scheduled_columns:
-        cursor.execute("ALTER TABLE scheduled_events ADD COLUMN location TEXT")
-        logger.info("Migrated scheduled_events: added location column")
-    if "end_time" not in scheduled_columns:
-        cursor.execute("ALTER TABLE scheduled_events ADD COLUMN end_time TIMESTAMP")
-        logger.info("Migrated scheduled_events: added end_time column")
-    
-    # 用户背景信息表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_profiles (
-            key TEXT PRIMARY KEY,
-            value TEXT,
-            is_sensitive BOOLEAN DEFAULT 0,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # 背景规则表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS background_rules (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            rule_name TEXT NOT NULL UNIQUE,
-            description TEXT,
-            rule_json TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
+        # 向后兼容：老数据库可能缺少列，启动时自动迁移
+        life_columns = {row[1] for row in conn.execute("PRAGMA table_info(life_events)")}
+        if "person" not in life_columns:
+            conn.execute("ALTER TABLE life_events ADD COLUMN person TEXT")
+            logger.info("Migrated life_events: added person column")
+        if "location" not in life_columns:
+            conn.execute("ALTER TABLE life_events ADD COLUMN location TEXT")
+            logger.info("Migrated life_events: added location column")
+
+        scheduled_columns = {row[1] for row in conn.execute("PRAGMA table_info(scheduled_events)")}
+        if "person" not in scheduled_columns:
+            conn.execute("ALTER TABLE scheduled_events ADD COLUMN person TEXT")
+            logger.info("Migrated scheduled_events: added person column")
+        if "location" not in scheduled_columns:
+            conn.execute("ALTER TABLE scheduled_events ADD COLUMN location TEXT")
+            logger.info("Migrated scheduled_events: added location column")
+        if "end_time" not in scheduled_columns:
+            conn.execute("ALTER TABLE scheduled_events ADD COLUMN end_time TIMESTAMP")
+            logger.info("Migrated scheduled_events: added end_time column")
+
+        # 用户背景信息表
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                is_sensitive BOOLEAN DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 背景规则表
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS background_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rule_name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                rule_json TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        conn.commit()
     logger.info("Database initialized successfully")
 
 
@@ -127,10 +135,8 @@ def init_db():
 def health():
     """健康检查端点"""
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        conn.close()
+        with _db_conn() as conn:
+            conn.execute("SELECT 1")
         return jsonify({'status': 'ok', 'timestamp': datetime.now().isoformat()})
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
@@ -142,28 +148,22 @@ def health():
 def get_life_events():
     """获取生活事件列表"""
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # 支持分页
         limit = request.args.get('limit', 100, type=int)
         offset = request.args.get('offset', 0, type=int)
         category = request.args.get('category', None)
-        
+
         query = "SELECT * FROM life_events"
         params = []
-        
         if category:
             query += " WHERE category = ?"
             params.append(category)
-        
         query += " ORDER BY event_date DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
-        
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
-        
+
+        with _db_conn() as conn:
+            cursor = conn.execute(query, params)
+            rows = cursor.fetchall()
+
         return jsonify({
             'data': [dict(row) for row in rows],
             'count': len(rows),
@@ -178,30 +178,31 @@ def get_life_events():
 @app.route('/api/life_events', methods=['POST'])
 def create_life_event():
     """创建生活事件"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        data = request.json
-        cursor.execute('''
-            INSERT INTO life_events 
-            (category, person, location, item, quantity, unit, notes, raw_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            data.get('category'),
-            data.get('person'),
-            data.get('location'),
-            data.get('item'),
-            data.get('quantity'),
-            data.get('unit'),
-            data.get('notes'),
-            data.get('raw_text')
-        ))
-        
-        conn.commit()
-        event_id = cursor.lastrowid
-        conn.close()
-        
+        with _db_conn() as conn:
+            cursor = conn.execute(
+                '''
+                INSERT INTO life_events
+                (category, person, location, item, quantity, unit, notes, raw_text)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    data.get('category'),
+                    data.get('person'),
+                    data.get('location'),
+                    data.get('item'),
+                    data.get('quantity'),
+                    data.get('unit'),
+                    data.get('notes'),
+                    data.get('raw_text'),
+                ),
+            )
+            conn.commit()
+            event_id = cursor.lastrowid
+
         logger.info(f"Created life event: {event_id}")
         return jsonify({'id': event_id, 'status': 'created'}), 201
     except Exception as e:
@@ -214,19 +215,12 @@ def create_life_event():
 def get_scheduled_events():
     """获取周期性事件列表"""
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM scheduled_events 
-            ORDER BY start_time ASC
-        ''')
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return jsonify({
-            'data': [dict(row) for row in rows],
-            'count': len(rows)
-        })
+        with _db_conn() as conn:
+            cursor = conn.execute(
+                'SELECT * FROM scheduled_events ORDER BY start_time ASC'
+            )
+            rows = cursor.fetchall()
+        return jsonify({'data': [dict(row) for row in rows], 'count': len(rows)})
     except Exception as e:
         logger.error(f"Error fetching scheduled events: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -235,31 +229,33 @@ def get_scheduled_events():
 @app.route('/api/scheduled_events', methods=['POST'])
 def create_scheduled_event():
     """创建周期性事件"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        data = request.json
-        cursor.execute('''
-            INSERT INTO scheduled_events 
-            (title, person, location, category, start_time, end_time, recurrence_rule, required_items, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            data.get('title'),
-            data.get('person'),
-            data.get('location'),
-            data.get('category'),
-            data.get('start_time'),
-            data.get('end_time'),
-            data.get('recurrence_rule'),
-            json.dumps(data.get('required_items', [])),
-            data.get('notes')
-        ))
-        
-        conn.commit()
-        event_id = cursor.lastrowid
-        conn.close()
-        
+        with _db_conn() as conn:
+            cursor = conn.execute(
+                '''
+                INSERT INTO scheduled_events
+                (title, person, location, category, start_time, end_time,
+                 recurrence_rule, required_items, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    data.get('title'),
+                    data.get('person'),
+                    data.get('location'),
+                    data.get('category'),
+                    data.get('start_time'),
+                    data.get('end_time'),
+                    data.get('recurrence_rule'),
+                    json.dumps(data.get('required_items', [])),
+                    data.get('notes'),
+                ),
+            )
+            conn.commit()
+            event_id = cursor.lastrowid
+
         logger.info(f"Created scheduled event: {event_id}")
         return jsonify({'id': event_id, 'status': 'created'}), 201
     except Exception as e:
@@ -272,12 +268,11 @@ def create_scheduled_event():
 def get_user_profile():
     """获取用户背景信息"""
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('SELECT key, value, is_sensitive FROM user_profiles')
-        rows = cursor.fetchall()
-        conn.close()
-        
+        with _db_conn() as conn:
+            cursor = conn.execute(
+                'SELECT key, value, is_sensitive FROM user_profiles'
+            )
+            rows = cursor.fetchall()
         return jsonify({
             'data': {row['key']: row['value'] for row in rows if not row['is_sensitive']},
             'count': len(rows)
@@ -290,20 +285,17 @@ def get_user_profile():
 @app.route('/api/user_profile', methods=['POST'])
 def update_user_profile():
     """更新用户背景信息"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        data = request.json
-        for key, value in data.items():
-            cursor.execute('''
-                INSERT OR REPLACE INTO user_profiles (key, value)
-                VALUES (?, ?)
-            ''', (key, value))
-        
-        conn.commit()
-        conn.close()
-        
+        with _db_conn() as conn:
+            for key, value in data.items():
+                conn.execute(
+                    'INSERT OR REPLACE INTO user_profiles (key, value) VALUES (?, ?)',
+                    (key, value),
+                )
+            conn.commit()
         logger.info(f"Updated user profile: {list(data.keys())}")
         return jsonify({'status': 'updated', 'count': len(data)})
     except Exception as e:
@@ -316,16 +308,10 @@ def update_user_profile():
 def get_background_rules():
     """获取背景规则"""
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM background_rules')
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return jsonify({
-            'data': [dict(row) for row in rows],
-            'count': len(rows)
-        })
+        with _db_conn() as conn:
+            cursor = conn.execute('SELECT * FROM background_rules')
+            rows = cursor.fetchall()
+        return jsonify({'data': [dict(row) for row in rows], 'count': len(rows)})
     except Exception as e:
         logger.error(f"Error fetching background rules: {str(e)}")
         return jsonify({'error': str(e)}), 500

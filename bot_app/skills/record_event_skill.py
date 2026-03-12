@@ -85,9 +85,10 @@ class RecordEventSkill(BaseSkill):
             Optional[Dict]: 解析的 JSON，或 None
         """
         try:
-            # 移除可能的前后空白
+            # 移除可能的前后空白，并修复 LLM 常见的结尾逗号问题
             text = text.strip()
-            
+            text = re.sub(r',\s*([}\]])', r'\1', text)
+
             # 尝试找到 JSON 块
             # 方法1：直接 JSON
             try:
@@ -95,16 +96,16 @@ class RecordEventSkill(BaseSkill):
                 return self._validate_schema(data)
             except json.JSONDecodeError:
                 pass
-            
+
             # 方法2：从 ```json...``` 代码块中提取
-            json_match = re.search(r'```json\n(.*?)\n```', text, re.DOTALL)
+            json_match = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL | re.IGNORECASE)
             if json_match:
                 try:
                     data = json.loads(json_match.group(1))
                     return self._validate_schema(data)
                 except json.JSONDecodeError:
                     pass
-            
+
             # 方法3：寻找 { ... } 块
             brace_start = text.find('{')
             brace_end = text.rfind('}')

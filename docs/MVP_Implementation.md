@@ -1,5 +1,9 @@
 # VedaAide MVP 实现总结
 
+> ⚠️ **历史参考文档**：项目结构树与部分架构描述已过时。
+> 当前准确的结构说明见 [STRUCTURE.md](../STRUCTURE.md)，
+> 问题与整改进度见 [Issues_and_Progress.md](Issues_and_Progress.md)。
+
 ## 📊 实现完成度
 
 | 组件 | 状态 | 说明 |
