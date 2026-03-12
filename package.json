@@ -5,17 +5,11 @@
   "description": "Local helper scripts for VedaAide",
   "scripts": {
     "start": "bash scripts/start_local.sh",
-    "start:local": "bash scripts/start_local.sh",
-    "db:local": "bash -lc 'DATABASE_PATH=./data py sqlite_app/app.py'",
-    "bot:local": "bash -lc 'OLLAMA_URL=http://localhost:11434 DB_PATH=./data/vedaaide.db py -m bot_app.main'",
-    "bot:watch": "bash -lc 'OLLAMA_URL=http://localhost:11434 DB_PATH=./data/vedaaide.db py scripts/restartable_bot_runner.py'",
-    "test:mvp": "bash -lc 'OLLAMA_URL=http://localhost:11434 DB_PATH=./data/vedaaide.db py test_mvp.py'",
-    "health:db": "curl -fsS http://localhost:5000/health",
+    "bot:watch": "bash scripts/start_local.sh",
     "db:view:events": "node scripts/view_db.mjs events",
     "db:view:schedules": "node scripts/view_db.mjs schedules",
     "db:view:profile": "node scripts/view_db.mjs profile",
-    "env:check": "bash -lc 'rg -n \"^(TELEGRAM_BOT_TOKEN|OLLAMA_URL|DB_PATH|TELEGRAM_CHAT_ID)=\" .env || true'",
-    "ollama:list": "ollama list"
+    "env:check": "bash -lc 'rg -n \"^(TELEGRAM_BOT_TOKEN|DEEPSEEK_API_KEY|DB_PATH)=\" .env || true'"
   }
 }
 

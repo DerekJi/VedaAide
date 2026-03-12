@@ -9,65 +9,50 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
+
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.ORACLE_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.ORACLE_SERVER_IP }} >> ~/.ssh/known_hosts
-      
-      - name: Deploy to Oracle Cloud
+
+      - name: Sync code to VM
+        run: |
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='data/' \
+            --exclude='venv/' \
+            --exclude='logs/' \
+            --exclude='__pycache__/' \
+            --exclude='*.pyc' \
+            -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" \
+            ./ ${{ secrets.ORACLE_SSH_USER }}@${{ secrets.ORACLE_SERVER_IP }}:${{ secrets.ORACLE_PROJECT_PATH }}/
+
+      - name: Deploy on VM
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.ORACLE_SSH_USER }}@${{ secrets.ORACLE_SERVER_IP }} << 'EOF'
           set -e
-          
-          echo "🚀 Starting deployment..."
           cd ${{ secrets.ORACLE_PROJECT_PATH }}
-          
-          # 拉取最新代码
-          echo "📥 Pulling latest code..."
-          git fetch origin
-          git reset --hard origin/main
-          
-          # 确保 .env 中关键变量存在（不覆盖已有值）
+
+          # 写入密钥到 .env（不覆盖已有值）
           touch .env
           grep -q "^DEEPSEEK_API_KEY=" .env || echo "DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}" >> .env
           grep -q "^TELEGRAM_BOT_TOKEN=" .env || echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
-          
-          # 停止现有服务
-          echo "🛑 Stopping existing services..."
-          docker-compose down || true
-          
-          # 重新构建本地镜像（源码已更新）
-          echo "🔨 Building images from updated source..."
-          docker-compose build --no-cache vedaaide-bot
-          
-          # 启动新服务
-          echo "🚀 Starting new services..."
-          docker-compose up -d
-          
-          # 等待服务启动
-          echo "⏳ Waiting for services to be ready..."
-          sleep 10
-          
-          # 健康检查
-          echo "🏥 Running health checks..."
-          docker-compose ps
-          
-          echo "✅ Deployment completed successfully!"
+
+          # 执行部署脚本
+          bash scripts/deploy.sh
           EOF
-      
+
       - name: Cleanup SSH
         if: always()
-        run: |
-          rm -rf ~/.ssh/id_rsa
-          rm -rf ~/.ssh/known_hosts
-      
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
+
       - name: Notify deployment status
         if: always()
         uses: 8398a7/action-slack@v3

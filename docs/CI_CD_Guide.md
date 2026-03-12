@@ -6,90 +6,52 @@ VedaAide 采用 **GitHub Actions + Oracle Cloud** 的自动化部署方案：
 
 - 每次 push 到 `main` 分支时自动触发部署
 - 支持手动触发部署
-- 自动备份数据
-- 健康检查和回滚机制
-- Slack 通知（可选）
+- rsync 增量推送源码，VM 上无需安装 git 或 Docker
+- systemd 管理进程，崩溃自动重启
 
 ---
 
 ## 🔧 前置准备
 
-### 1. Oracle Cloud VM 配置
+### Oracle Cloud VM 配置
 
-**需要安装以下工具：**
+**VM 默认用户是 `opc`（Oracle Linux），不是 `ubuntu`。**
 
-```bash
-# 安装 Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
+VM 上已预装：python3 / venv / rsync，**无需手动安装任何软件**。
 
-# 安装 Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
-# 安装 Git
-sudo apt-get update
-sudo apt-get install -y git
-
-# 克隆项目
-git clone https://github.com/YOUR_USERNAME/VedaAide.git
-cd VedaAide
-```
-
-**创建部署用户（可选但推荐）：**
+首次初始化只需创建项目目录：
 
 ```bash
-# 创建专用部署用户
-sudo useradd -m -s /bin/bash vedaaide
-sudo usermod -aG docker vedaaide
+ssh -i ~/.ssh/vedaaide_deploy opc@YOUR_ORACLE_IP
 
-# 配置 sudoers（如果需要）
-echo "vedaaide ALL=(ALL) NOPASSWD: /usr/bin/docker-compose" | sudo tee /etc/sudoers.d/vedaaide
+mkdir -p /home/opc/VedaAide/data /home/opc/VedaAide/logs
+touch /home/opc/VedaAide/.env
 ```
 
 ---
 
 ## 🔑 配置 GitHub Secrets
 
-### 访问 GitHub Secrets 配置页面
+**Settings → Secrets and variables → Actions → New repository secret**
 
-1. 进入 GitHub 仓库
-2. 点击 **Settings** → **Secrets and variables** → **Actions**
-3. 点击 **New repository secret**
-
-### 必需的 Secrets
-
-添加以下 Secrets：
-
-| Secret 名称 | 说明 | 示例 |
+| Secret 名称 | 说明 | 值 |
 |-----------|------|------|
-| `ORACLE_SSH_PRIVATE_KEY` | Oracle VM SSH 私钥 | `-----BEGIN RSA PRIVATE KEY-----...` |
-| `ORACLE_SSH_USER` | SSH 用户名 | `vedaaide` 或 `ubuntu` |
-| `ORACLE_SERVER_IP` | Oracle VM 公网IP | `152.69.85.123` |
-| `ORACLE_PROJECT_PATH` | 项目在服务器上的路径 | `/home/vedaaide/VedaAide` |
+| `ORACLE_SSH_PRIVATE_KEY` | SSH 私钥 | `cat ~/.ssh/vedaaide_deploy` 全部内容 |
+| `ORACLE_SSH_USER` | SSH 用户名 | `opc` |
+| `ORACLE_SERVER_IP` | Oracle VM 公网IP | `130.162.193.156` |
+| `ORACLE_PROJECT_PATH` | 项目路径 | `/home/opc/VedaAide` |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key | — |
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | — |
 
-### 可选的 Secrets（用于通知）
+可选：
 
 | Secret 名称 | 说明 |
 |-----------|------|
-| `SLACK_WEBHOOK_URL` | Slack webhook 地址（用于部署通知） |
+| `SLACK_WEBHOOK_URL` | Slack 部署通知 |
 
 ---
 
 ## 📝 配置 SSH 密钥
-
-### 方式1：使用现有的 SSH 密钥
-
-如果已拥有 Oracle VM 的 SSH 密钥：
-
-```bash
-# 查看私钥内容
-cat ~/.ssh/oracle_private_key
-
-# 复制完整内容到 GitHub Secrets 中的 ORACLE_SSH_PRIVATE_KEY
-```
-
-### 方式2：生成新的 SSH 密钥对
 
 ```bash
 # 在本地生成
@@ -97,14 +59,9 @@ ssh-keygen -t rsa -b 4096 -f ~/.ssh/vedaaide_deploy -N ""
 
 # 查看私钥（复制到 GitHub Secrets）
 cat ~/.ssh/vedaaide_deploy
-
-# 将公钥添加到 Oracle VM
-ssh ubuntu@YOUR_ORACLE_IP << 'EOF'
-mkdir -p ~/.ssh
-echo "$(cat ~/.ssh/vedaaide_deploy.pub)" >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
-EOF
 ```
+
+公钥在创建 Oracle VM 时已通过控制台配置，无需手动添加到 `authorized_keys`。
 
 ---
 
@@ -112,92 +69,49 @@ EOF
 
 ### 自动部署（推荐）
 
-只需将代码 push 到 `main` 分支：
-
 ```bash
 git add .
 git commit -m "feat: add new skill"
 git push origin main
 ```
 
-GitHub Actions 会自动：
-1. ✅ 拉取最新代码
-2. ✅ 备份数据
-3. ✅ 停止现有服务
-4. ✅ 拉取最新容器镜像
-5. ✅ 启动新服务
-6. ✅ 执行健康检查
-7. ✅ 发送 Slack 通知（可选）
+GitHub Actions 自动执行：
+1. ✅ Checkout 代码（在 runner 上）
+2. ✅ rsync 推送源码到 VM（增量，几秒完成）
+3. ✅ SSH 写入 .env 密钥（不覆盖已有值）
+4. ✅ 创建/更新 venv，安装依赖
+5. ✅ 更新 systemd service 文件
+6. ✅ `systemctl restart vedaaide`
+7. ✅ 健康检查：`systemctl is-active`
 
-### 手动触发部署
+### 手动触发
 
-进入 GitHub Actions 选项卡 → 选择 **Deploy to Oracle Cloud** → 点击 **Run workflow** → 选择 `main` 分支 → 确认
+GitHub Actions → **Deploy to Oracle Cloud** → **Run workflow** → `main`
 
 ---
 
 ## 📊 监控部署
 
-### 在 GitHub 查看部署日志
-
-1. 进入仓库 → **Actions** 选项卡
-2. 点击最新的 **Deploy to Oracle Cloud** 工作流程
-3. 展开 **Deploy to Oracle Cloud** job 查看日志
-
-### 在 Oracle VM 查看部署日志
+### 查看服务状态
 
 ```bash
-# SSH 连接到服务器
-ssh -i ~/.ssh/oracle_private_key vedaaide@YOUR_ORACLE_IP
+ssh -i ~/.ssh/vedaaide_deploy opc@YOUR_ORACLE_IP
 
-# 查看最近的部署日志
-tail -f /home/vedaaide/VedaAide/backups/deploy_*.log
+# 服务状态
+sudo systemctl status vedaaide
 
-# 查看 Docker 容器日志
-cd ~/VedaAide
-docker-compose logs -f vedaaide-bot  # 查看 Bot 核心日志
-docker-compose logs -f vedaaide-db   # 查看数据库日志
-```
+# 实时日志
+sudo journalctl -u vedaaide -f
 
----
-
-## 💾 数据备份与恢复
-
-### 自动备份
-
-部署脚本会自动在 `backups/` 目录中创建备份：
-
-```bash
-# 查看备份列表
-ls -lh /home/vedaaide/VedaAide/backups/
-
-# 备份文件命名格式
-data_20260311_120000.tar.gz           # 生活事件数据
-chroma_data_20260311_120000.tar.gz    # ChromaDB 向量数据
-```
-
-### 手动恢复备份
-
-```bash
-cd /home/vedaaide/VedaAide
-
-# 停止服务
-docker-compose down
-
-# 恢复数据
-tar -xzf backups/data_20260311_120000.tar.gz
-tar -xzf backups/chroma_data_20260311_120000.tar.gz
-
-# 重新启动
-docker-compose up -d
+# 最近 50 行日志
+sudo journalctl -u vedaaide -n 50 --no-pager
 ```
 
 ---
 
 ## 🔄 环境变量配置
 
-### 创建 .env 文件
-
-在服务器项目根目录创建 `.env` 文件：
+`.env` 文件位于 VM 的 `/home/opc/VedaAide/.env`。首次部署时由 GitHub Actions 自动写入 `DEEPSEEK_API_KEY` 和 `TELEGRAM_BOT_TOKEN`。其他变量可手动编辑：
 
 ```bash
 # Telegram Bot
@@ -207,55 +121,44 @@ TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
 DEEPSEEK_API_KEY=YOUR_DEEPSEEK_API_KEY
 DEEPSEEK_MODEL=deepseek-chat
 
-# 数据库（Bot 直连 SQLite，无需 HTTP 服务）
-DB_PATH=/app/data/vedaaide.db
+# 数据库路径
+DB_PATH=/home/opc/VedaAide/data/vedaaide.db
 
 # 时区
 TZ=Asia/Shanghai
 ```
 
-**重要：** `.env` 文件中的机密信息不应提交到 Git。在 `.gitignore` 中已排除：
-
-```bash
-# .gitignore
-.env
-.env.local
-```
+**`.env` 文件被 rsync 和 git 均排除，不会被覆盖或泄露。**
 
 ---
 
 ## 🛠️ 故障排除
 
-### 故障：SSH 连接失败
+### SSH 连接失败
 
 ```bash
-# 检查 SSH 密钥权限
-chmod 600 ~/.ssh/oracle_private_key
-
-# 测试 SSH 连接
-ssh -i ~/.ssh/oracle_private_key -v vedaaide@YOUR_ORACLE_IP
+chmod 600 ~/.ssh/vedaaide_deploy
+ssh -i ~/.ssh/vedaaide_deploy -v opc@YOUR_ORACLE_IP
 ```
 
-### 故障：容器启动失败
+### 服务启动失败
 
 ```bash
-# 查看容器日志
-docker-compose logs vedaaide-bot
-
-# 查看 Docker 错误
-docker ps -a
-docker inspect CONTAINER_ID
+sudo journalctl -u vedaaide -n 50 --no-pager
 ```
 
-### 故障：后续部署中数据丢失
+### 手动重新部署
 
-确保 `.env` 中配置了正确的数据卷路径，`docker-compose.yml` 中的 `volumes` 指向正确的主机路径。
+```bash
+cd /home/opc/VedaAide
+bash scripts/deploy.sh
+```
 
 ---
 
 ## 📈 最佳实践
 
-### 1. 分支策略
+### 分支策略
 
 ```
 main       ← 稳定生产分支（自动部署）
@@ -263,40 +166,30 @@ develop    ← 开发分支（本地测试）
 feature/*  ← 功能分支（PR 后合并）
 ```
 
-### 2. 提交信息规范（Conventional Commits）
+### 提交信息规范
 
 ```bash
 git commit -m "feat: add record_event_skill"
-git commit -m "fix: fix Ollama timeout issue"
+git commit -m "fix: fix timeout issue"
 git commit -m "docs: update deployment guide"
 ```
-
-### 3. 部署前检查清单
-
-- [ ] 在本地测试通过
-- [ ] 代码审查（PR）完成
-- [ ] 更新相关文档
-- [ ] 检查 `.env` 配置
-- [ ] 确保备份可用
 
 ## 🔐 安全建议
 
 - ✅ 定期轮换 SSH 密钥
-- ✅ 使用强密码保护 SSH 密钥
 - ✅ 定期审查 GitHub Secrets
-- ✅ 不要将机密信息提交到 Git
-- ✅ 使用 VPC 和安全组限制 Oracle VM 访问
-- ✅ 启用 GitHub 的分支保护规则（在 main 分支上要求 PR 审查）
+- ✅ 不要将 .env 提交到 Git
+- ✅ 使用 Oracle NSG 限制 VM 入站规则（只开 22 端口）
 
 ---
 
 ## 📞 常见问题
 
 **Q: 部署失败会回滚吗？**
-A: 目前的脚本不会自动回滚。建议部署前进行备份，并在部署日志中查看具体错误。后续可添加自动回滚机制。
+A: 不会自动回滚。`data/` 目录不受部署影响，数据安全。如需回滚代码，在本地 `git revert` 后重新 push。
 
-**Q: 可以部署到多个服务器吗？**
-A: 可以。在 GitHub Secrets 中添加多个 `ORACLE_SERVER_IP` 变量，并在 workflow 中配置矩阵策略。
+**Q: .env 里的密钥会丢失吗？**
+A: 不会。rsync 排除了 `.env`，deploy.yml 只在变量不存在时才追加写入，不会覆盖。
 
 **Q: 如何跳过某次自动部署？**
 A: 在提交信息中添加 `[skip ci]`：

@@ -25,14 +25,14 @@
 
 ### 2. 核心架构设计 (Architecture)
 
-采用 **Docker Compose** 容器化部署，实现模块化解耦。**方案选定基于Gemini方案 + DeepSeek极简策略的混合方案**，优先数据隐私和成本控制：
+直接部署在 Oracle Cloud VM 上（无容器），systemd 管理进程。
 
-| 组件名称 | 容器服务名 | 技术栈 | 职责 |
-| --- | --- | --- | --- |
-| **Bot 核心** | `vedaaide-core` | Python (aiogram) | 处理 TG 消息、Whisper 转录、技能分发 |
-| **语义引擎** | `vedaaide-brain` | Ollama (LLaMA/Qwen) | 意图识别、实体提取、技能路由（完全本地，零成本） |
-| **结构化库** | `vedaaide-db` | SQLite | 存储理发、库存、开销等**硬数据** |
-| **记忆引擎** | `vedaaide-memory` | ChromaDB | 存储生活杂感、背景偏好等**软记忆**（后期扩展） |
+| 组件 | 技术栈 | 职责 |
+| --- | --- | --- |
+| **Bot 核心** | Python / aiogram | 处理 Telegram 消息、技能分发、FSM 多轮对话 |
+| **AI 引擎** | DeepSeek API | 意图识别、实体提取、技能路由 |
+| **结构化库** | SQLite（aiosqlite）| 存储生活事件、日程、背景信息等硬数据 |
+| **软记忆引擎** | ChromaDB | 存储生活杂感、背景偏好等软记忆（**后期规划，暂未实现**） |
 
 ---
 
@@ -40,57 +40,52 @@
 
 | 文档 | 用途 |
 |------|------|
-| [Architecture.md](docs/Architecture.md) | **核心技术方案** - 完整的架构设计、分阶段实施计划 |
-| [Migration_Guide.md](docs/Migration_Guide.md) | 数据迁移指南 - 从本地开发到云端生产 |
-| [SimpleArchitecture.md](docs/SimpleArchitecture.md) | 历史参考 - DeepSeek 极简方案对比存档 |
+| [QuickStart_CI_CD.md](docs/QuickStart_CI_CD.md) | 5 分钟快速部署到 Oracle Cloud |
+| [CI_CD_Guide.md](docs/CI_CD_Guide.md) | 完整 CI/CD 部署指南 |
+| [Migration_Guide.md](docs/Migration_Guide.md) | 数据迁移指南 |
 
 ---
 
 ## 🎯 技术选型决定
 
-**方案：混合架构（Gemini 完整设计 + DeepSeek 极简策略）**
-
 ### 核心考虑
 
-| 决策点 | 选择 | 原因 |
+| 决策点 | 当前选择 | 原因 |
 |------|------|------|
-| 数据存储 | SQLite + ChromaDB（本地）| 完全隐私 + 数据自主控制 |
-| AI 引擎 | Ollama + 开源模型（Qwen/LLaMA）| 免费 + 零成本长期运维 |
-| 部署 | Docker Compose | 微服务解耦 + 易迁移 |
-| 实施 | MVP 优先 | 2 周完成核心流程，快速验证 |
+| 数据存储 | SQLite（本地文件）| 完全隐私 + 零成本 + 数据自主控制 |
+| AI 引擎 | DeepSeek API | 成本极低 + 推理能力强 |
+| 部署 | Oracle Cloud Always Free VM + systemd | 永久免费 + 简单可靠 |
+| 实施 | MVP 优先 | 快速启动，按需扩展 |
 
 ### 为什么不用 Gemini API/GPT-4o
 
-- ❌ 持续付费（每月 token 成本）
+- ❌ 持续付费（每月 token 成本高）
 - ❌ 数据隐私依赖第三方
-- ❌ 延迟和配额限制
-- ✅ Ollama 七参数量模型足以处理结构化任务
+- ✅ DeepSeek API 成本极低，结构化任务表现强
 
 ---
 
 ## 🔄 核心交互流程
 
-VedaAide 采用**确认闭环设计**，确保每条数据都经过用户确认才入库，避免 LLM 理解偏差导致的数据污染。
+VedaAide 采用**确认闭环设计**，确保每条数据都经过用户确认才入库。
 
 ```
 用户发送文本
     ↓
-Ollama 意图识别 (选择 Skill)
+DeepSeek API 意图识别（选择 Skill）
     ↓
-Ollama 技能执行 (结构化提取)
+DeepSeek API 技能执行（结构化提取）
     ↓
-Bot 反馈给用户 (JSON + 确认按钮)
-    ↓ [用户点击✅确认]
+Bot 反馈给用户（提取结果 + 确认按钮）
+    ↓ [用户点击 ✅ 确认]
 SQLite 持久化入库
 ```
 
 **关键特性：**
 - ✍️ **纯文字输入**：通过 Telegram 发送文本消息
 - ✅ **确认必须**：无确认 = 无入库（防止误识别数据污染）
-- 🧠 **本地处理**：所有识别在本地完成，零 API 调用
+- 🔒 **数据自主**：SQLite 文件存在自己的服务器，完全隐私
 - 📊 **结构化存储**：确保数据清洁和可查询
-
-详见 [Architecture.md](docs/Architecture.md) 的第4章。
 
 ---
 
@@ -143,7 +138,7 @@ CREATE TABLE user_profiles (
 
 2. **添加 4 个 GitHub Secrets**
    - `ORACLE_SSH_PRIVATE_KEY` - SSH 私钥
-   - `ORACLE_SSH_USER` - SSH 用户名（ubuntu）
+   - `ORACLE_SSH_USER` - SSH 用户名（`opc`，Oracle Linux 默认用户）
    - `ORACLE_SERVER_IP` - Oracle VM 公网 IP
    - `ORACLE_PROJECT_PATH` - 项目路径
 

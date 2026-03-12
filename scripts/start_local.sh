@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 本地开发一键启动脚本
+# 用法: bash scripts/start_local.sh
+#       npm start
 
 set -euo pipefail
 
@@ -13,20 +16,50 @@ warn() { echo "[WARN] $*"; }
 fail() { echo "[ERROR] $*"; exit 1; }
 
 pick_python() {
-  if command -v py >/dev/null 2>&1; then
-    echo "py"
-    return
-  fi
-  if command -v python3 >/dev/null 2>&1; then
-    echo "python3"
-    return
-  fi
-  if command -v python >/dev/null 2>&1; then
-    echo "python"
-    return
-  fi
+  if command -v py >/dev/null 2>&1; then echo "py"; return; fi
+  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
+  if command -v python >/dev/null 2>&1; then echo "python"; return; fi
   fail "Python not found. Install Python 3 first."
 }
+
+load_env_file() {
+  local env_file="$1"
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" != *=* ]] && continue
+    local key="${line%%=*}"
+    local value="${line#*=}"
+    key="${key//[[:space:]]/}"
+    if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      export "$key=$value"
+    fi
+  done < "$env_file"
+}
+
+if [ -f "$ROOT_DIR/.env" ]; then
+  load_env_file "$ROOT_DIR/.env"
+  info "Loaded .env"
+else
+  warn ".env not found; using current shell env/defaults"
+fi
+
+PY_CMD="$(pick_python)"
+info "Using Python: $PY_CMD"
+
+export DB_PATH="${DB_PATH:-$ROOT_DIR/data/vedaaide.db}"
+
+if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  fail "TELEGRAM_BOT_TOKEN is not set. Add it to .env first."
+fi
+
+if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
+  fail "DEEPSEEK_API_KEY is not set. Add it to .env first."
+fi
+
+info "Starting VedaAide bot (with auto-restart)..."
+info "DB_PATH=$DB_PATH"
+exec "$PY_CMD" "$ROOT_DIR/scripts/restartable_bot_runner.py"
 
 load_env_file() {
   local env_file="$1"

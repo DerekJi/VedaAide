@@ -22,7 +22,7 @@ from bot_app.deepseek_client import DeepSeekClient
 from bot_app.db_client import DatabaseClient
 from bot_app.message_processor import MessageProcessor, PendingEvent, ClarificationRequest
 
-# 本地运行时自动加载 .env；Docker 场景下环境变量会直接注入。
+# 自动加载 .env（生产环境由 systemd EnvironmentFile 注入，load_dotenv 无副作用）
 load_dotenv()
 
 # 配置日志（支持 LOG_LEVEL 环境变量）

@@ -1,0 +1,18 @@
+[Unit]
+Description=VedaAide Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opc
+WorkingDirectory=/home/opc/VedaAide
+EnvironmentFile=/home/opc/VedaAide/.env
+ExecStart=/home/opc/VedaAide/venv/bin/python -m bot_app.main
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
