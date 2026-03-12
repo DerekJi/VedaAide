@@ -24,12 +24,13 @@ log "项目路径: $PROJECT_PATH"
 log "=========================================="
 
 cd "$PROJECT_PATH"
+export PYTHONPATH="$PROJECT_PATH"
 
 # 步骤 1: 创建/更新 venv 并安装依赖
 log "📦 安装 Python 依赖..."
 python3 -m venv venv
-venv/bin/pip install -q --upgrade pip
-venv/bin/pip install -q -r bot_app/requirements.txt
+venv/bin/pip install -q --no-cache-dir --upgrade pip
+venv/bin/pip install -q --no-cache-dir -r bot_app/requirements.txt
 success "依赖安装完成"
 
 # 步骤 2: 安装/更新 systemd service 文件
@@ -41,15 +42,17 @@ success "service 文件已更新"
 
 # 步骤 3: 重启服务
 log "🔄 重启服务..."
-sudo systemctl restart vedaaide
+sudo systemctl restart vedaaide || true
 
 # 步骤 4: 健康检查
-sleep 3
+sleep 5
 if sudo systemctl is-active --quiet vedaaide; then
     success "服务运行正常"
     sudo systemctl status vedaaide --no-pager -l | tail -5
 else
-    fail "服务启动失败，最近日志：\n$(sudo journalctl -u vedaaide -n 20 --no-pager)"
+    log "=== 最近 30 条 journal 日志 ==="
+    sudo journalctl -u vedaaide -n 30 --no-pager
+    fail "服务启动失败（见上方日志）"
 fi
 
 log "=========================================="
