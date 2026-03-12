@@ -32,7 +32,8 @@ VedaAide/
 │   ├── Dockerfile                   # Bot 服务的 Docker 镜像定义
 │   ├── requirements.txt             # Bot 依赖（aiogram, aiosqlite, APScheduler 等）
 │   ├── main.py                      # 🤖 主程序入口：Telegram Bot + 每日提醒调度器
-│   ├── ollama_client.py             # LLM 通信：与 Ollama 交互（意图路由 + 信息提取）
+│   ├── deepseek_client.py           # LLM 通信：与 DeepSeek API 交互（意图路由 + 信息提取）
+│   ├── ollama_client.py             # LLM 通信（本地开发备用：Ollama 版本）
 │   ├── db_client.py                 # 数据库层：直接通过 aiosqlite 操作 SQLite
 │   ├── message_processor.py         # 业务逻辑层：纯函数，无 Telegram 依赖，供测试共用
 │   └── skills/
@@ -58,10 +59,10 @@ VedaAide/
 │   ├── conftest.py                  # 共享 fixtures（event_loop, tmp_db）
 │   ├── unit/
 │   │   ├── test_db_client.py        # DB 层单元测试（13 个用例）
-│   │   ├── test_message_processor_utils.py  # 纯函数单元测试（27 个用例）
-│   │   └── test_skills.py           # RecordEventSkill / ScheduleEventSkill 解析测试（21 个用例）
+│   │   ├── test_message_processor_utils.py  # 纯函数单元测试（11 个用例）
+│   │   └── test_skills.py           # RecordEventSkill / ScheduleEventSkill 解析测试（18 个用例）
 │   └── integration/
-│       └── test_message_processor.py  # MessageProcessor 端到端集成测试（18 个用例）
+│       └── test_message_processor.py  # MessageProcessor 端到端集成测试（25 个用例）
 │
 ├── ollama_data/                     # Ollama 模型数据（Git忽略）
 │
@@ -106,8 +107,8 @@ npm run db:view:profile
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | ✅ | Telegram Bot Token |
 | `TELEGRAM_CHAT_ID` | 推荐 | 接收每日提醒的 chat ID（不设则跳过推送）|
-| `OLLAMA_URL` | 可选 | Ollama 服务地址，默认 `http://localhost:11434` |
-| `OLLAMA_MODEL` | 可选 | 使用的 LLM 模型，默认 `qwen:7b-chat` |
+| `DEEPSEEK_API_KEY` | ✅ | DeepSeek API Key（从 platform.deepseek.com 获取）|
+| `DEEPSEEK_MODEL` | 可选 | 使用的模型，默认 `deepseek-chat` |
 | `DB_PATH` | 可选 | SQLite 文件路径，默认 `./data/vedaaide.db` |
 | `TZ` | 可选 | 时区，默认 `Asia/Shanghai` |
 | `LOG_LEVEL` | 可选 | 日志级别，默认 `INFO` |

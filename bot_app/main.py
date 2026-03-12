@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from bot_app.ollama_client import OllamaClient
+from bot_app.deepseek_client import DeepSeekClient
 from bot_app.db_client import DatabaseClient
 from bot_app.message_processor import MessageProcessor, PendingEvent, ClarificationRequest
 
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # 环境配置（变量名与 .env.example 保持一致）
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DB_PATH = os.getenv("DB_PATH", "./data/vedaaide.db")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
@@ -44,7 +44,7 @@ if not TELEGRAM_TOKEN:
 
 # 初始化客户端
 bot = Bot(token=TELEGRAM_TOKEN)
-ollama_client = OllamaClient(base_url=OLLAMA_BASE_URL)
+ollama_client = DeepSeekClient(api_key=DEEPSEEK_API_KEY)
 db_client = DatabaseClient(db_path=DB_PATH)
 processor = MessageProcessor(ollama_client=ollama_client, db_client=db_client)
 dp = Dispatcher()

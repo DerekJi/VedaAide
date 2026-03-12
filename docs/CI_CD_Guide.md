@@ -154,7 +154,7 @@ tail -f /home/vedaaide/VedaAide/backups/deploy_*.log
 
 # 查看 Docker 容器日志
 cd ~/VedaAide
-docker-compose logs -f core_service  # 查看 Bot 核心日志
+docker-compose logs -f vedaaide-bot  # 查看 Bot 核心日志
 docker-compose logs -f vedaaide-db   # 查看数据库日志
 ```
 
@@ -203,14 +203,12 @@ docker-compose up -d
 # Telegram Bot
 TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
 
-# Ollama
-OLLAMA_URL=http://ollama:11434
+# DeepSeek API
+DEEPSEEK_API_KEY=YOUR_DEEPSEEK_API_KEY
+DEEPSEEK_MODEL=deepseek-chat
 
-# 数据库
-DB_URL=http://vedaaide-db:5000
-
-# ChromaDB（后期）
-CHROMA_URL=http://chroma:8000
+# 数据库（Bot 直连 SQLite，无需 HTTP 服务）
+DB_PATH=/app/data/vedaaide.db
 
 # 时区
 TZ=Asia/Shanghai
@@ -242,7 +240,7 @@ ssh -i ~/.ssh/oracle_private_key -v vedaaide@YOUR_ORACLE_IP
 
 ```bash
 # 查看容器日志
-docker-compose logs core_service
+docker-compose logs vedaaide-bot
 
 # 查看 Docker 错误
 docker ps -a

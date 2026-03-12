@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Bot 核心服务（直连 SQLite，无 HTTP 依赖）
+  # Bot 核心服务（直连 SQLite，调用 DeepSeek API）
   vedaaide-bot:
     build:
       context: .
@@ -10,42 +10,17 @@ services:
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
-      - OLLAMA_URL=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:8b}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
       - DB_PATH=/app/data/vedaaide.db
       - TZ=${TZ:-Asia/Shanghai}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./bot_app:/app
       - ./data:/app/data
-    depends_on:
-      - ollama
     restart: unless-stopped
     networks:
       - vedaaide-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # Ollama AI 大脑
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    volumes:
-      - ./ollama_data:/root/.ollama
-    # ports:
-    #   - "11434:11434"  # 生产环境不需要暴露
-    restart: unless-stopped
-    networks:
-      - vedaaide-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
     logging:
       driver: "json-file"
       options:

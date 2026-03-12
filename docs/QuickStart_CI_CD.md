@@ -71,8 +71,9 @@ cd VedaAide
 # 创建 .env 文件（如果需要）
 cat > .env << 'EOF'
 TELEGRAM_BOT_TOKEN=your_telegram_token_here
-OLLAMA_URL=http://ollama:11434
-DB_URL=http://vedaaide-db:5000
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+DEEPSEEK_MODEL=deepseek-chat
+DB_PATH=/app/data/vedaaide.db
 TZ=Asia/Shanghai
 EOF
 
@@ -117,7 +118,7 @@ cd ~/VedaAide
 docker-compose ps
 
 # 查看最新日志
-docker-compose logs -f core_service
+docker-compose logs -f vedaaide-bot
 
 # 查看部署日志
 tail -f backups/deploy_*.log
@@ -211,7 +212,7 @@ ssh ubuntu@YOUR_ORACLE_IP "tail -f ~/VedaAide/backups/deploy_*.log"
 ssh ubuntu@YOUR_ORACLE_IP
 cd ~/VedaAide
 docker-compose ps
-docker-compose logs -n 50 core_service  # 最后 50 行日志
+docker-compose logs -n 50 vedaaide-bot  # 最后 50 行日志
 ```
 
 ---
