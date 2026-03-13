@@ -1,0 +1,17 @@
+app = "vedaaide"
+primary_region = "syd"
+
+# Telegram bot 用 polling 模式，不监听任何端口，无需 [[services]] 或 [http_service]
+
+[env]
+  DB_PATH = "/data/vedaaide.db"
+  LOG_LEVEL = "INFO"
+
+[[mounts]]
+  source = "vedaaide_data"
+  destination = "/data"
+
+[vm]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

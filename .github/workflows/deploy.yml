@@ -1,10 +1,10 @@
-name: Deploy to Oracle Cloud
+name: Deploy to Fly.io
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -14,59 +14,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.ORACLE_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ConnectTimeout 30\n  ServerAliveInterval 10\n  ServerAliveCountMax 3\n' > ~/.ssh/config
+      - name: Deploy to Fly.io
+        uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Test SSH connectivity
-        run: |
-          ssh -i ~/.ssh/id_rsa \
-            ${{ secrets.ORACLE_SSH_USER }}@${{ secrets.ORACLE_SERVER_IP }} \
-            echo "SSH connection OK"
-
-      - name: Sync code to VM
-        run: |
-          rsync -az --delete \
-            --exclude='.git' \
-            --exclude='.env' \
-            --exclude='data/' \
-            --exclude='venv/' \
-            --exclude='logs/' \
-            --exclude='__pycache__/' \
-            --exclude='*.pyc' \
-            -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" \
-            ./ ${{ secrets.ORACLE_SSH_USER }}@${{ secrets.ORACLE_SERVER_IP }}:${{ secrets.ORACLE_PROJECT_PATH }}/
-
-      - name: Deploy on VM
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.ORACLE_SSH_USER }}@${{ secrets.ORACLE_SERVER_IP }} << 'EOF'
-          set -e
-          cd ${{ secrets.ORACLE_PROJECT_PATH }}
-
-          # 写入密钥到 .env（不覆盖已有值）
-          touch .env
-          grep -q "^DEEPSEEK_API_KEY=" .env || echo "DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}" >> .env
-          grep -q "^TELEGRAM_BOT_TOKEN=" .env || echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
-
-          # 执行部署脚本
-          bash scripts/deploy.sh
-          EOF
-
-      - name: Cleanup SSH
-        if: always()
-        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
-
-      - name: Notify deployment status
-        if: always()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          text: |
-            VedaAide Deployment ${{ job.status }}
-            Commit: ${{ github.sha }}
-            Author: ${{ github.actor }}
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
-        continue-on-error: true
+      - name: Run flyctl deploy
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
