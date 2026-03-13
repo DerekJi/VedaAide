@@ -4,7 +4,7 @@
 VedaAide/
 ├── .github/
 │   └── workflows/
-│       ├── deploy.yml              # 自动部署到 Oracle Cloud（rsync + systemd）
+│       ├── deploy.yml              # 自动部署到 Fly.io（flyctl deploy）
 │       └── ci.yml                  # CI 检查（代码质量、测试、安全）
 │
 ├── .gitignore                       # Git 忽略列表
@@ -36,9 +36,6 @@ VedaAide/
 │       └── schedule_event_skill.py  # 技能2：记录日程/周期事件
 │
 ├── scripts/
-│   ├── deploy.sh                    # VM 部署脚本（venv + systemd）
-│   ├── vedaaide.service             # systemd service 文件
-│   ├── setup_vm.sh                  # VM 首次初始化（只需执行一次）
 │   ├── start_local.sh               # 本地开发一键启动
 │   ├── restartable_bot_runner.py    # 本地开发：带自动重启的 Bot 运行器
 │   └── view_db.mjs                  # 本地开发：直接读取 SQLite 查看数据
@@ -107,21 +104,17 @@ npm run db:view:profile
 ```
 git push origin main
     ↓ GitHub Actions
-    ├── rsync 推送源码到 VM
-    └── SSH 执行 deploy.sh
-          ├── pip install（venv）
-          ├── systemctl restart vedaaide
-          └── 健康检查
+    └── flyctl deploy --remote-only
+          ├── Docker 镜像在 Fly.io 远端构建
+          └── 自动滚动部署
 ```
 
-### 手动部署 / 排查
+### 监控 / 排查
 
 ```bash
-ssh -i ~/.ssh/vedaaide_deploy opc@YOUR_ORACLE_IP
-
-sudo systemctl status vedaaide
-sudo journalctl -u vedaaide -f
-bash /home/opc/VedaAide/scripts/deploy.sh
+flyctl status --app vedaaide
+flyctl logs --app vedaaide
+flyctl ssh console --app vedaaide
 ```
 
 ---

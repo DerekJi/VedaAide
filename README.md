@@ -25,7 +25,7 @@
 
 ### 2. 核心架构设计 (Architecture)
 
-直接部署在 Oracle Cloud VM 上（无容器），systemd 管理进程。
+部署在 Fly.io 容器平台上，Docker 镜像自动构建与部署。
 
 | 组件 | 技术栈 | 职责 |
 | --- | --- | --- |
@@ -40,7 +40,7 @@
 
 | 文档 | 用途 |
 |------|------|
-| [QuickStart_CI_CD.md](docs/QuickStart_CI_CD.md) | 5 分钟快速部署到 Oracle Cloud |
+| [QuickStart_CI_CD.md](docs/QuickStart_CI_CD.md) | 5 分钟快速部署到 Fly.io |
 | [CI_CD_Guide.md](docs/CI_CD_Guide.md) | 完整 CI/CD 部署指南 |
 | [Migration_Guide.md](docs/Migration_Guide.md) | 数据迁移指南 |
 
@@ -54,7 +54,7 @@
 |------|------|------|
 | 数据存储 | SQLite（本地文件）| 完全隐私 + 零成本 + 数据自主控制 |
 | AI 引擎 | DeepSeek API | 成本极低 + 推理能力强 |
-| 部署 | Oracle Cloud Always Free VM + systemd | 永久免费 + 简单可靠 |
+| 部署 | Fly.io + Docker | 稳定可靠 + 自动部署 |
 | 实施 | MVP 优先 | 快速启动，按需扩展 |
 
 ### 为什么不用 Gemini API/GPT-4o
@@ -120,27 +120,27 @@ CREATE TABLE user_profiles (
 |------|------|
 | [Architecture.md](docs/Architecture.md) | 核心设计、分阶段实施计划、Skill 架构 |
 | [QuickStart_CI_CD.md](docs/QuickStart_CI_CD.md) | ⚡ **5分钟快速启动 CI/CD** |
-| [CI_CD_Guide.md](docs/CI_CD_Guide.md) | 完整的 GitHub + Oracle Cloud 部署指南 |
+| [CI_CD_Guide.md](docs/CI_CD_Guide.md) | 完整 CI/CD 部署指南 |
 | [Migration_Guide.md](docs/Migration_Guide.md) | 本地到生产环境的数据迁移 |
 
 ---
 
-## 🔄 自动化部署（GitHub + Oracle Cloud）
+## 🔄 自动化部署（GitHub + Fly.io）
 
-**工作流程：** Push 代码 → GitHub Actions 自动部署 → Oracle VM 自动启动
+**工作流程：** Push 代码 → GitHub Actions → `flyctl deploy` → Fly.io 自动构建启动
 
 ### 快速 5 分钟设置
 
-1. **生成 SSH 密钥**
+1. **安装 flyctl 并初始化**
    ```bash
-   ssh-keygen -t rsa -b 4096 -f ~/.ssh/vedaaide_deploy -N ""
+   flyctl auth login
+   flyctl apps create vedaaide
+   flyctl volumes create vedaaide_data --region syd --size 1 --app vedaaide
+   flyctl secrets set TELEGRAM_BOT_TOKEN=xxx DEEPSEEK_API_KEY=xxx --app vedaaide
    ```
 
-2. **添加 4 个 GitHub Secrets**
-   - `ORACLE_SSH_PRIVATE_KEY` - SSH 私钥
-   - `ORACLE_SSH_USER` - SSH 用户名（`opc`，Oracle Linux 默认用户）
-   - `ORACLE_SERVER_IP` - Oracle VM 公网 IP
-   - `ORACLE_PROJECT_PATH` - 项目路径
+2. **添加 1 个 GitHub Secret**
+   - `FLY_API_TOKEN` - 运行 `flyctl tokens org personal` 获取
 
 3. **Push 代码自动部署**
    ```bash
